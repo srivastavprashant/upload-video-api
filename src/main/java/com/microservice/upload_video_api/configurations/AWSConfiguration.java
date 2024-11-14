@@ -1,21 +1,21 @@
 package com.microservice.upload_video_api.configurations;
 
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import com.amazonaws.services.secretsmanager.AWSSecretsManager;
-import com.amazonaws.services.secretsmanager.AWSSecretsManagerClientBuilder;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class AWSConfiguration {
     @Bean
-    public AmazonS3 s3Client() {
-        return AmazonS3ClientBuilder.standard().build();
+    public S3Client s3Client() {
+        return S3Client.builder().build();
     }
     @Bean
-    public AWSSecretsManager secretsManager() {
-        return AWSSecretsManagerClientBuilder.standard().build();
+    public SecretsManagerClient secretsManager() {
+        return SecretsManagerClient.builder().build();
     }
 
 }
