@@ -15,13 +15,12 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
-import java.nio.file.CopyOption;
+
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.Objects;
-import java.util.Random;
-import java.util.UUID;
+
 
 @RequiredArgsConstructor
 @Service
