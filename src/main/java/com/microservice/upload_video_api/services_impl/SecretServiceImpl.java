@@ -6,6 +6,7 @@ import com.microservice.upload_video_api.configurations.SecretManagerSecretHolde
 import com.microservice.upload_video_api.configurations.SecretValueHolder;
 import com.microservice.upload_video_api.services.SecretService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
@@ -13,6 +14,7 @@ import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueReques
 
 @Service
 @RequiredArgsConstructor
+@Log4j2
 public class SecretServiceImpl implements SecretService {
 
     private final SecretManagerSecretHolder secretManagerSecretHolder;
@@ -23,12 +25,12 @@ public class SecretServiceImpl implements SecretService {
         GetSecretValueRequest getSecretValueRequest = GetSecretValueRequest.builder()
                 .secretId(secretManagerSecretHolder.getAllSecretHolder())
                 .build();
-
+        log.info("Secrets Manager call initiated to fetch secret value");
+        log.info("Current active environment: {}", secretManagerSecretHolder.getRunningEnvironment());
         var getSecretValueResponse = secretsManagerClient.getSecretValue(getSecretValueRequest);
         try {
             ObjectMapper objectMapper = new ObjectMapper();
             var secretValueHolder = getSecretValueResponse.secretString();
-
             var rootNode = objectMapper.readTree(secretValueHolder);
             String env;
             switch (secretManagerSecretHolder.getRunningEnvironment()) {
@@ -38,7 +40,7 @@ public class SecretServiceImpl implements SecretService {
             }
             return objectMapper.readValue(env, SecretValueHolder.class);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse secret JSON", e);
+            throw new RuntimeException("Failed to parse secret-manager JSON", e);
         }
 
     }

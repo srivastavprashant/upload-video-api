@@ -3,23 +3,36 @@ package com.microservice.upload_video_api.services_impl;
 
 
 import com.microservice.upload_video_api.dto.Video;
+import com.microservice.upload_video_api.dto.records.UploadInitiateResponse;
+import com.microservice.upload_video_api.entities.S3UploadedVideoDescriptionData;
 import com.microservice.upload_video_api.entities.VideoEntity;
+import com.microservice.upload_video_api.repositories.S3UploadedVideoDescriptionDataRepository;
 import com.microservice.upload_video_api.repositories.VideoRepository;
 import com.microservice.upload_video_api.services.UploadService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.*;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.UploadPartPresignRequest;
 
 import java.io.File;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.Objects;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.*;
+import java.util.stream.Collectors;
+
+import static com.microservice.upload_video_api.configurations.constants.ApplicationConstants.s3BuckedName;
 
 
 @RequiredArgsConstructor
@@ -29,6 +42,9 @@ public class UploadServiceImpl implements UploadService {
 
     final VideoRepository videoRepository;
     static String DIR;
+    final S3Client s3Client;
+    final S3Presigner s3Presigner;
+    private final S3UploadedVideoDescriptionDataRepository s3UploadedVideoDescriptionDataRepository;
 
     static{
         DIR = "uploaded-videos/";
@@ -65,6 +81,74 @@ public class UploadServiceImpl implements UploadService {
 
     }
 
+    public UploadInitiateResponse initiateMultipartUpload(String fileName) {
+        CreateMultipartUploadRequest createMultipartUploadRequest = CreateMultipartUploadRequest.builder()
+                .bucket(s3BuckedName)
+                .key(fileName)
+                .expires(Instant.now().plus(Duration.ofHours(24))) //expire after 24 hrs.
+                .build();
+        CreateMultipartUploadResponse response = s3Client.createMultipartUpload(createMultipartUploadRequest);
+        return new UploadInitiateResponse(fileName, response.uploadId(), response.abortDate());
+    }
 
+    public Map<String, String> generatePreSignedUrl(String fileName, String uploadId, int partNumber) {
+        try {
+            // Create the upload part request
+            UploadPartRequest uploadPartRequest = UploadPartRequest.builder()
+                    .bucket(s3BuckedName)
+                    .key(fileName)
+                    .uploadId(uploadId)
+                    .partNumber(partNumber)
+                    .contentLength(100 * 1024 * 1024L) // Set max content length for each part as needed (100 MB for example)
+                    .build();
+
+            // Create the pre signed request for uploading a part
+            UploadPartPresignRequest preSignRequest = UploadPartPresignRequest.builder()
+                    .uploadPartRequest(uploadPartRequest) // Provide the UploadPartRequest directly
+                    .signatureDuration(Duration.ofHours(24)) // Set the pre signed URL expiration time
+                    .build();
+
+            // Generate the pre signed URL
+            var preSignedResponse = s3Presigner.presignUploadPart(preSignRequest);
+            // Prepare the response map
+            Map<String, String> response = new HashMap<>();
+            response.put("url", preSignedResponse.url().toString());
+            return response;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException("Failed to generate presigned URL", e);
+        }
+    }
+    public Map<String, String> completeMultipartUpload(String fileName, String uploadId, List<CompletedPart> completedParts) {
+//        // Create a list of completed parts
+//        List<CompletedPart> completedPartsList = completedParts.stream()
+//                .map(part -> CompletedPart.builder()
+//                        .partNumber(part.partNumber())
+//                        .eTag(part.eTag())
+//                        .build())
+//                .collect(Collectors.toList());
+
+        // Create the complete multipart upload request
+        CompleteMultipartUploadRequest completeMultipartUploadRequest = CompleteMultipartUploadRequest.builder()
+                .bucket(s3BuckedName)
+                .key(fileName)
+                .uploadId(uploadId)
+                .multipartUpload(CompletedMultipartUpload.builder()
+                        .parts(completedParts)
+                        .build())
+                .build();
+
+        // Complete the multipart upload
+        CompleteMultipartUploadResponse response = s3Client.completeMultipartUpload(completeMultipartUploadRequest);
+        var s3UploadedVideoDescriptionData = new S3UploadedVideoDescriptionData();
+        s3UploadedVideoDescriptionData.setS3UploadedVideoDescriptionDataId(String.valueOf(UUID.randomUUID()));
+        BeanUtils.copyProperties(response, s3UploadedVideoDescriptionData);
+        var savedData = s3UploadedVideoDescriptionDataRepository.save(s3UploadedVideoDescriptionData);
+
+        // Prepare the response map
+        Map<String, String> responseMap = new HashMap<>();
+        responseMap.put("message", "Upload completed successfully");
+        return responseMap;
+    }
 }
-

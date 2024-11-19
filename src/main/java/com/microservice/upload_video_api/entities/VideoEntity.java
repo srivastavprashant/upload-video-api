@@ -1,12 +1,12 @@
 package com.microservice.upload_video_api.entities;
 
-import com.fasterxml.jackson.databind.util.BeanUtil;
 import com.microservice.upload_video_api.dto.Video;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import lombok.*;
 import org.springframework.beans.BeanUtils;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
@@ -18,6 +18,8 @@ import java.util.UUID;
 public class VideoEntity {
     @Id
     private String id;
+    private String uploadS3Id;
+    private LocalDateTime expiryDateOfUploadId;
     private String title;
     private String description;
     private String videoUrl;
