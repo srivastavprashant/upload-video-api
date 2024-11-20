@@ -3,6 +3,7 @@ package com.microservice.upload_video_api.services_impl;
 
 
 import com.microservice.upload_video_api.dto.Video;
+import com.microservice.upload_video_api.dto.records.ETagList;
 import com.microservice.upload_video_api.dto.records.UploadInitiateResponse;
 import com.microservice.upload_video_api.entities.S3UploadedVideoDescriptionData;
 import com.microservice.upload_video_api.entities.VideoEntity;
@@ -30,9 +31,10 @@ import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
-import java.util.stream.Collectors;
 
-import static com.microservice.upload_video_api.configurations.constants.ApplicationConstants.s3BuckedName;
+
+import static com.microservice.upload_video_api.configurations.constants.ApplicationConstants.folderName;
+import static com.microservice.upload_video_api.configurations.constants.ApplicationConstants.s3BucketName;
 
 
 @RequiredArgsConstructor
@@ -81,25 +83,26 @@ public class UploadServiceImpl implements UploadService {
 
     }
 
-    public UploadInitiateResponse initiateMultipartUpload(String fileName) {
+    public UploadInitiateResponse initiateMultipartUpload(String fileName, String contentType) {
         CreateMultipartUploadRequest createMultipartUploadRequest = CreateMultipartUploadRequest.builder()
-                .bucket(s3BuckedName)
-                .key(fileName)
+                .bucket(s3BucketName)
+                .key(folderName + fileName)
                 .expires(Instant.now().plus(Duration.ofHours(24))) //expire after 24 hrs.
+                .contentType(contentType)
                 .build();
         CreateMultipartUploadResponse response = s3Client.createMultipartUpload(createMultipartUploadRequest);
         return new UploadInitiateResponse(fileName, response.uploadId(), response.abortDate());
     }
 
-    public Map<String, String> generatePreSignedUrl(String fileName, String uploadId, int partNumber) {
+    public Map<String, String> generatePreSignedUrl(String fileName, String uploadId, int partNumber, Long contentLength) {
         try {
             // Create the upload part request
             UploadPartRequest uploadPartRequest = UploadPartRequest.builder()
-                    .bucket(s3BuckedName)
-                    .key(fileName)
+                    .bucket(s3BucketName)
+                    .key(folderName + fileName)
                     .uploadId(uploadId)
                     .partNumber(partNumber)
-                    .contentLength(100 * 1024 * 1024L) // Set max content length for each part as needed (100 MB for example)
+                    .contentLength(contentLength) // Set exact content length for each part as needed
                     .build();
 
             // Create the pre signed request for uploading a part
@@ -120,22 +123,22 @@ public class UploadServiceImpl implements UploadService {
             throw new RuntimeException("Failed to generate presigned URL", e);
         }
     }
-    public Map<String, String> completeMultipartUpload(String fileName, String uploadId, List<CompletedPart> completedParts) {
-//        // Create a list of completed parts
-//        List<CompletedPart> completedPartsList = completedParts.stream()
-//                .map(part -> CompletedPart.builder()
-//                        .partNumber(part.partNumber())
-//                        .eTag(part.eTag())
-//                        .build())
-//                .collect(Collectors.toList());
+    public Map<String, String> completeMultipartUpload(String fileName, String uploadId, List<ETagList> eTagList) {
+        // Create a list of completed parts
+        List<CompletedPart> completedPartsList = eTagList.parallelStream()
+                .map(part -> CompletedPart.builder()
+                        .partNumber(part.partNumber())
+                        .eTag(part.eTag())
+                        .build())
+                .toList();
 
         // Create the complete multipart upload request
         CompleteMultipartUploadRequest completeMultipartUploadRequest = CompleteMultipartUploadRequest.builder()
-                .bucket(s3BuckedName)
-                .key(fileName)
+                .bucket(s3BucketName)
+                .key(folderName + fileName)
                 .uploadId(uploadId)
                 .multipartUpload(CompletedMultipartUpload.builder()
-                        .parts(completedParts)
+                        .parts(completedPartsList)
                         .build())
                 .build();
 

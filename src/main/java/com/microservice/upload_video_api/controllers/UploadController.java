@@ -1,20 +1,14 @@
 package com.microservice.upload_video_api.controllers;
 
 import com.microservice.upload_video_api.dto.Video;
-import com.microservice.upload_video_api.dto.records.UploadInitiateResponse;
-import com.microservice.upload_video_api.entities.S3UploadedVideoDescriptionData;
+import com.microservice.upload_video_api.dto.records.ETagList;
 import com.microservice.upload_video_api.models.ResponseMessage;
-import com.microservice.upload_video_api.repositories.S3UploadedVideoDescriptionDataRepository;
 import com.microservice.upload_video_api.services.UploadService;
-import jdk.jfr.ContentType;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.BeanUtils;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
 
 import java.util.List;
@@ -43,8 +37,8 @@ public class UploadController {
 
 
     @PostMapping("/initiate-upload")
-    public ResponseEntity<ResponseMessage> initiateMultipartUpload(@RequestParam String fileName) {
-        var initiateResponse = uploadService.initiateMultipartUpload(fileName);
+    public ResponseEntity<ResponseMessage> initiateMultipartUpload(@RequestParam String fileName, @RequestParam String contentType) {
+        var initiateResponse = uploadService.initiateMultipartUpload(fileName, contentType);
         ResponseMessage response = ResponseMessage.builder()
                 .message("Successful")
                 .exceptionMessage("")
@@ -57,8 +51,8 @@ public class UploadController {
 
     // Step 2: Generate Pre-signed URLs for Each Part
     @PostMapping("/generate-pre-signed-url")
-    public ResponseEntity<ResponseMessage> generatePreSignedUrl(String fileName, String uploadId, int partNumber) {
-        var generatedUrlObject =  uploadService.generatePreSignedUrl(fileName, uploadId, partNumber);
+    public ResponseEntity<ResponseMessage> generatePreSignedUrl(String fileName, String uploadId, int partNumber, Long contentLength) {
+        var generatedUrlObject =  uploadService.generatePreSignedUrl(fileName, uploadId, partNumber, contentLength);
         var response = new ResponseMessage().withSuccessDefaultResponse(generatedUrlObject);
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
@@ -68,8 +62,8 @@ public class UploadController {
     public ResponseEntity<ResponseMessage> completeMultipartUpload(
             @RequestParam String fileName,
             @RequestParam String uploadId,
-            @RequestBody List<CompletedPart> completedParts) {
-        var generatedUrlObject = uploadService.completeMultipartUpload(fileName, uploadId, completedParts);
+            @RequestBody List<ETagList> eTagList) {
+        var generatedUrlObject = uploadService.completeMultipartUpload(fileName, uploadId, eTagList);
         var response = new ResponseMessage().withSuccessDefaultResponse(generatedUrlObject);
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
