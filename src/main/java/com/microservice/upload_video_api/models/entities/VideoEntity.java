@@ -1,6 +1,6 @@
-package com.microservice.upload_video_api.entities;
+package com.microservice.upload_video_api.models.entities;
 
-import com.microservice.upload_video_api.dto.Video;
+import com.microservice.upload_video_api.models.dto.Video;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import lombok.*;
@@ -18,6 +18,8 @@ import java.util.UUID;
 public class VideoEntity {
     @Id
     private String id;
+    @Id
+    private String uniqueViewId;
     private String uploadS3Id;
     private LocalDateTime expiryDateOfUploadId;
     private String title;
@@ -36,11 +38,13 @@ public class VideoEntity {
     private String duration;
     private String uploadType;
     private String uploadSize;
+    private String isUploaded;
 
     public VideoEntity from(Video video){
-
+        //todo, better way of copying, as this way we will also replace id(generated) sent by client side as per their choice, this shoulnt appen
         BeanUtils.copyProperties(video, this);
         this.id = UUID.randomUUID().toString();
+        this.uniqueViewId = UUID.randomUUID().toString();
         return this;
     }
 }

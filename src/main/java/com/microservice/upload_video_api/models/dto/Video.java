@@ -1,6 +1,4 @@
-package com.microservice.upload_video_api.dto;
-
-import lombok.NoArgsConstructor;
+package com.microservice.upload_video_api.models.dto;
 
 
 public record Video(

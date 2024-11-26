@@ -1,7 +1,7 @@
 package com.microservice.upload_video_api.controllers;
 
-import com.microservice.upload_video_api.dto.Video;
-import com.microservice.upload_video_api.dto.records.ETagList;
+import com.microservice.upload_video_api.models.dto.Video;
+import com.microservice.upload_video_api.models.dto.ETagList;
 import com.microservice.upload_video_api.models.ResponseMessage;
 import com.microservice.upload_video_api.services.UploadService;
 import lombok.RequiredArgsConstructor;
@@ -9,7 +9,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import software.amazon.awssdk.services.s3.model.*;
 
 import java.util.List;
 
@@ -37,8 +36,8 @@ public class UploadController {
 
 
     @PostMapping("/initiate-upload")
-    public ResponseEntity<ResponseMessage> initiateMultipartUpload(@RequestParam String fileName, @RequestParam String contentType) {
-        var initiateResponse = uploadService.initiateMultipartUpload(fileName, contentType);
+    public ResponseEntity<ResponseMessage> initiateMultipartUpload(@RequestParam String fileName, @RequestParam String contentType, @RequestBody Video video) {
+        var initiateResponse = uploadService.initiateMultipartUpload(fileName, contentType, video);
         ResponseMessage response = ResponseMessage.builder()
                 .message("Successful")
                 .exceptionMessage("")

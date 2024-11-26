@@ -1,4 +1,4 @@
-package com.microservice.upload_video_api.entities;
+package com.microservice.upload_video_api.models.entities;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;

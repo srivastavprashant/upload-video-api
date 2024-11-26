@@ -2,11 +2,11 @@ package com.microservice.upload_video_api.services_impl;
 
 
 
-import com.microservice.upload_video_api.dto.Video;
-import com.microservice.upload_video_api.dto.records.ETagList;
-import com.microservice.upload_video_api.dto.records.UploadInitiateResponse;
-import com.microservice.upload_video_api.entities.S3UploadedVideoDescriptionData;
-import com.microservice.upload_video_api.entities.VideoEntity;
+import com.microservice.upload_video_api.models.dto.Video;
+import com.microservice.upload_video_api.models.dto.ETagList;
+import com.microservice.upload_video_api.models.dto.UploadInitiateResponse;
+import com.microservice.upload_video_api.models.entities.S3UploadedVideoDescriptionData;
+import com.microservice.upload_video_api.models.entities.VideoEntity;
 import com.microservice.upload_video_api.repositories.S3UploadedVideoDescriptionDataRepository;
 import com.microservice.upload_video_api.repositories.VideoRepository;
 import com.microservice.upload_video_api.services.UploadService;
@@ -30,6 +30,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.*;
 
 
@@ -83,15 +84,21 @@ public class UploadServiceImpl implements UploadService {
 
     }
 
-    public UploadInitiateResponse initiateMultipartUpload(String fileName, String contentType) {
+    public UploadInitiateResponse initiateMultipartUpload(String fileName, String contentType, Video videoData) {
+        var videoEntity = new VideoEntity().from(videoData);
+        var expiryDate = Instant.now().plus(Duration.ofHours(24));
         CreateMultipartUploadRequest createMultipartUploadRequest = CreateMultipartUploadRequest.builder()
                 .bucket(s3BucketName)
                 .key(folderName + fileName)
-                .expires(Instant.now().plus(Duration.ofHours(24))) //expire after 24 hrs.
+                .expires(expiryDate) //expire after 24 hrs.
                 .contentType(contentType)
                 .build();
+        videoEntity.setVideoUrl(folderName + fileName);
+        videoEntity.setExpiryDateOfUploadId(expiryDate.atZone(ZoneId.systemDefault()).toLocalDateTime());
+        videoEntity.setIsUploaded("InProgress");
+        videoRepository.save(videoEntity);
         CreateMultipartUploadResponse response = s3Client.createMultipartUpload(createMultipartUploadRequest);
-        return new UploadInitiateResponse(fileName, response.uploadId(), response.abortDate());
+        return new UploadInitiateResponse(fileName, videoEntity.getUniqueViewId(), response.abortDate());
     }
 
     public Map<String, String> generatePreSignedUrl(String fileName, String uploadId, int partNumber, Long contentLength) {

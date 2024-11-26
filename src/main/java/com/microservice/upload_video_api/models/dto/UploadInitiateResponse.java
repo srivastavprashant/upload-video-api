@@ -1,4 +1,4 @@
-package com.microservice.upload_video_api.dto.records;
+package com.microservice.upload_video_api.models.dto;
 
 import java.time.Instant;
 
