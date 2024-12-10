@@ -3,6 +3,7 @@ package com.microservice.upload_video_api.models.entities;
 import com.microservice.upload_video_api.models.dto.Video;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.UniqueConstraint;
 import lombok.*;
 import org.springframework.beans.BeanUtils;
 
@@ -18,7 +19,6 @@ import java.util.UUID;
 public class VideoEntity {
     @Id
     private String id;
-    @Id
     private String uniqueViewId;
     private String uploadS3Id;
     private LocalDateTime expiryDateOfUploadId;

@@ -15,7 +15,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/upload-video")
 @RequiredArgsConstructor
-public class UploadController {
+public class  UploadController {
 
     final UploadService uploadService;
 

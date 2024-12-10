@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Configuration;
 @Log4j2
 public class AWSConfiguration {
     @Configuration
+    static
     class S3Configuration {
         @Bean
         public S3Client s3Client() {
