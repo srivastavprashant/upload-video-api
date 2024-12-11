@@ -70,3 +70,11 @@ To run the application in UAT environment:
 ```bash
 docker-compose -f docker-compose.uat.yml up --build
 ```
+
+
+### Swagger | Open API Document URL
+To run the application in UAT environment:
+```link
+http://localhost:8086/upload-service/v1/swagger-ui.html
+```
+Note: Replace domain to visit remote APIs.

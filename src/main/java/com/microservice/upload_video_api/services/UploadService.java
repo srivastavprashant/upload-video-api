@@ -1,8 +1,9 @@
 package com.microservice.upload_video_api.services;
 
+import com.microservice.upload_video_api.models.dto.InitiateUpload.req.InitiateUploadRequest;
 import com.microservice.upload_video_api.models.dto.Video;
 import com.microservice.upload_video_api.models.dto.ETagList;
-import com.microservice.upload_video_api.models.dto.UploadInitiateResponse;
+import com.microservice.upload_video_api.models.dto.InitiateUpload.res.UploadInitiateResponse;
 import com.microservice.upload_video_api.models.entities.VideoEntity;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -13,7 +14,7 @@ public interface UploadService {
     //    for saving video, basic method
     VideoEntity saveVideo(Video video, MultipartFile multipartFile);
 
-    UploadInitiateResponse initiateMultipartUpload(String fileName, String contentType, Video video);
+    UploadInitiateResponse initiateMultipartUpload(InitiateUploadRequest initiateUploadRequest);
 
     Map<String, String> generatePreSignedUrl(String fileName, String uploadId, int partNumber, Long contentLength);
 

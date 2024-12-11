@@ -1,9 +1,12 @@
 package com.microservice.upload_video_api.controllers;
 
+import com.microservice.upload_video_api.models.dto.InitiateUpload.req.InitiateUploadRequest;
 import com.microservice.upload_video_api.models.dto.Video;
 import com.microservice.upload_video_api.models.dto.ETagList;
 import com.microservice.upload_video_api.models.ResponseMessage;
 import com.microservice.upload_video_api.services.UploadService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,13 +16,15 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 @RestController
-@RequestMapping("/upload-video")
+@RequestMapping("/upload")
 @RequiredArgsConstructor
+@Tag(name = "Video Upload", description = "Video Upload API endpoints")
 public class  UploadController {
 
     final UploadService uploadService;
-
-    @PostMapping(path = "/upload")
+    @Operation(summary = "Upload a video",
+            description = "Upload a video file to the system")
+    @PostMapping(path = "/upload-full")
     public ResponseEntity<ResponseMessage> upload(@RequestParam("videoFile") MultipartFile videoFile, @RequestPart("video") Video video) {
         // Implement the logic to save the video and return the response field with the video URL and thumbnail URL
         var videoEntityData = uploadService.saveVideo(video, videoFile);
@@ -36,8 +41,8 @@ public class  UploadController {
 
 
     @PostMapping("/initiate-upload")
-    public ResponseEntity<ResponseMessage> initiateMultipartUpload(@RequestParam String fileName, @RequestParam String contentType, @RequestBody Video video) {
-        var initiateResponse = uploadService.initiateMultipartUpload(fileName, contentType, video);
+    public ResponseEntity<ResponseMessage> initiateMultipartUpload(@RequestBody InitiateUploadRequest initiateUploadRequest) {
+        var initiateResponse = uploadService.initiateMultipartUpload(initiateUploadRequest);
         ResponseMessage response = ResponseMessage.builder()
                 .message("Successful")
                 .exceptionMessage("")
@@ -57,7 +62,7 @@ public class  UploadController {
     }
 
     // Step 3: Complete Multipart Upload
-    @PostMapping("/complete-upload")
+    @PostMapping("/complete")
     public ResponseEntity<ResponseMessage> completeMultipartUpload(
             @RequestParam String fileName,
             @RequestParam String uploadId,

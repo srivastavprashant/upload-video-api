@@ -1,10 +1,10 @@
 package com.microservice.upload_video_api.services_impl;
 
 
-
+import com.microservice.upload_video_api.models.dto.InitiateUpload.req.InitiateUploadRequest;
 import com.microservice.upload_video_api.models.dto.Video;
 import com.microservice.upload_video_api.models.dto.ETagList;
-import com.microservice.upload_video_api.models.dto.UploadInitiateResponse;
+import com.microservice.upload_video_api.models.dto.InitiateUpload.res.UploadInitiateResponse;
 import com.microservice.upload_video_api.models.entities.S3UploadedVideoDescriptionData;
 import com.microservice.upload_video_api.models.entities.VideoEntity;
 import com.microservice.upload_video_api.repositories.S3UploadedVideoDescriptionDataRepository;
@@ -32,6 +32,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 
 import static com.microservice.upload_video_api.configurations.constants.ApplicationConstants.folderName;
@@ -49,18 +50,17 @@ public class UploadServiceImpl implements UploadService {
     final S3Presigner s3Presigner;
     private final S3UploadedVideoDescriptionDataRepository s3UploadedVideoDescriptionDataRepository;
 
-    static{
+    static {
         DIR = "uploaded-videos/";
     }
 
     @PostConstruct
     private void init() {
         var file = new File(DIR);
-        if(!file.exists()) {
+        if (!file.exists()) {
             file.mkdir();
             log.info("Directory created: {}", file.getAbsolutePath());
-        }
-        else{
+        } else {
             log.info("Folder exists");
         }
     }
@@ -68,38 +68,66 @@ public class UploadServiceImpl implements UploadService {
     @Override
     @SneakyThrows
     public VideoEntity saveVideo(Video video, MultipartFile multipartFile) {
-    log.info(video);
-    var fileName = StringUtils.cleanPath(Objects.requireNonNull(multipartFile.getOriginalFilename()));
-    var contentType = multipartFile.getContentType();
-    var inputStream = multipartFile.getInputStream();
+        log.info(video);
+        var fileName = StringUtils.cleanPath(Objects.requireNonNull(multipartFile.getOriginalFilename()));
+        var contentType = multipartFile.getContentType();
+        var inputStream = multipartFile.getInputStream();
 
-    var folderName = DIR;
-    var path = Paths.get(folderName, fileName);
+        var folderName = DIR;
+        var path = Paths.get(folderName, fileName);
 
-    //todo replace with s3 upload
-    Files.copy(inputStream, path, StandardCopyOption.REPLACE_EXISTING);
-    var videoEntity = new VideoEntity().from(video);
-    videoEntity.setVideoUrl(path.toString());
-    return videoRepository.save(videoEntity);
+        //todo replace with s3 upload
+        Files.copy(inputStream, path, StandardCopyOption.REPLACE_EXISTING);
+        var videoEntity = new VideoEntity().from(video);
+        videoEntity.setVideoUrl(path.toString());
+        return videoRepository.save(videoEntity);
 
     }
 
-    public UploadInitiateResponse initiateMultipartUpload(String fileName, String contentType, Video videoData) {
-        var videoEntity = new VideoEntity().from(videoData);
-        var expiryDate = Instant.now().plus(Duration.ofHours(24));
+    public UploadInitiateResponse initiateMultipartUpload(InitiateUploadRequest initiateUploadRequest) {
+        // Constants
+        final String UPLOAD_STATUS_IN_PROGRESS = "InProgress";
+        final Duration EXPIRY_DURATION = Duration.ofHours(24);
+
+        // Generate file path
+        String filePath = folderName + initiateUploadRequest.getFileName();
+
+        // Create expiry date once
+        Instant expiryDate = Instant.now().plus(EXPIRY_DURATION);
+
+        // Build video entity with all properties at once
+        VideoEntity videoEntity = new VideoEntity()
+                .from(initiateUploadRequest.getVideoData());
+        videoEntity.setIsUploaded(UPLOAD_STATUS_IN_PROGRESS);
+        videoEntity.setExpiryDateOfUploadId(expiryDate.atZone(ZoneId.systemDefault()).toLocalDateTime());
+
+        // Create S3 upload request
         CreateMultipartUploadRequest createMultipartUploadRequest = CreateMultipartUploadRequest.builder()
                 .bucket(s3BucketName)
-                .key(folderName + fileName)
-                .expires(expiryDate) //expire after 24 hrs.
-                .contentType(contentType)
+                .key(filePath)
+                .expires(expiryDate)
+                .contentType(initiateUploadRequest.getContentType())
                 .build();
-        videoEntity.setVideoUrl(folderName + fileName);
-        videoEntity.setExpiryDateOfUploadId(expiryDate.atZone(ZoneId.systemDefault()).toLocalDateTime());
-        videoEntity.setIsUploaded("InProgress");
-        videoRepository.save(videoEntity);
-        CreateMultipartUploadResponse response = s3Client.createMultipartUpload(createMultipartUploadRequest);
-        return new UploadInitiateResponse(fileName, videoEntity.getUniqueViewId(), response.abortDate());
+
+        // Execute operations in parallel using CompletableFuture
+        CompletableFuture<VideoEntity> saveEntityFuture = CompletableFuture
+                .supplyAsync(() -> videoRepository.save(videoEntity));
+
+        CompletableFuture<CreateMultipartUploadResponse> uploadFuture = CompletableFuture
+                .supplyAsync(() -> s3Client.createMultipartUpload(createMultipartUploadRequest));
+
+        // Wait for both operations to complete
+        CompletableFuture.allOf(saveEntityFuture, uploadFuture).join();
+
+        CreateMultipartUploadResponse response = uploadFuture.join();
+
+        return new UploadInitiateResponse(
+                initiateUploadRequest.getFileName(),
+                videoEntity.getUniqueViewId(),
+                response.abortDate()
+        );
     }
+
 
     public Map<String, String> generatePreSignedUrl(String fileName, String uploadId, int partNumber, Long contentLength) {
         try {
@@ -130,6 +158,7 @@ public class UploadServiceImpl implements UploadService {
             throw new RuntimeException("Failed to generate presigned URL", e);
         }
     }
+
     public Map<String, String> completeMultipartUpload(String fileName, String uploadId, List<ETagList> eTagList) {
         // Create a list of completed parts
         List<CompletedPart> completedPartsList = eTagList.parallelStream()
