@@ -1,7 +1,9 @@
 package com.microservice.upload_video_api.services_impl;
 
 
+import com.microservice.upload_video_api.models.dto.CompleteVideoUpload.req.CompleteVideoUploadRequest;
 import com.microservice.upload_video_api.models.dto.InitiateUpload.req.InitiateUploadRequest;
+import com.microservice.upload_video_api.models.dto.PreSign.req.PreSignRequest;
 import com.microservice.upload_video_api.models.dto.Video;
 import com.microservice.upload_video_api.models.dto.ETagList;
 import com.microservice.upload_video_api.models.dto.InitiateUpload.res.UploadInitiateResponse;
@@ -21,6 +23,7 @@ import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.UploadPartPresignRequest;
 
 import java.io.File;
@@ -45,44 +48,9 @@ import static com.microservice.upload_video_api.configurations.constants.Applica
 public class UploadServiceImpl implements UploadService {
 
     final VideoRepository videoRepository;
-    static String DIR;
     final S3Client s3Client;
     final S3Presigner s3Presigner;
     private final S3UploadedVideoDescriptionDataRepository s3UploadedVideoDescriptionDataRepository;
-
-    static {
-        DIR = "uploaded-videos/";
-    }
-
-    @PostConstruct
-    private void init() {
-        var file = new File(DIR);
-        if (!file.exists()) {
-            file.mkdir();
-            log.info("Directory created: {}", file.getAbsolutePath());
-        } else {
-            log.info("Folder exists");
-        }
-    }
-
-    @Override
-    @SneakyThrows
-    public VideoEntity saveVideo(Video video, MultipartFile multipartFile) {
-        log.info(video);
-        var fileName = StringUtils.cleanPath(Objects.requireNonNull(multipartFile.getOriginalFilename()));
-        var contentType = multipartFile.getContentType();
-        var inputStream = multipartFile.getInputStream();
-
-        var folderName = DIR;
-        var path = Paths.get(folderName, fileName);
-
-        //todo replace with s3 upload
-        Files.copy(inputStream, path, StandardCopyOption.REPLACE_EXISTING);
-        var videoEntity = new VideoEntity().from(video);
-        videoEntity.setVideoUrl(path.toString());
-        return videoRepository.save(videoEntity);
-
-    }
 
     public UploadInitiateResponse initiateMultipartUpload(InitiateUploadRequest initiateUploadRequest) {
         // Constants
@@ -123,31 +91,31 @@ public class UploadServiceImpl implements UploadService {
 
         return new UploadInitiateResponse(
                 initiateUploadRequest.getFileName(),
-                videoEntity.getUniqueViewId(),
+                response.uploadId(),
                 response.abortDate()
         );
     }
 
 
-    public Map<String, String> generatePreSignedUrl(String fileName, String uploadId, int partNumber, Long contentLength) {
+    public Map<String, String> generatePreSignedUrlMultiPartMethod(PreSignRequest preSignRequest) {
         try {
             // Create the upload part request
             UploadPartRequest uploadPartRequest = UploadPartRequest.builder()
                     .bucket(s3BucketName)
-                    .key(folderName + fileName)
-                    .uploadId(uploadId)
-                    .partNumber(partNumber)
-                    .contentLength(contentLength) // Set exact content length for each part as needed
+                    .key(folderName + preSignRequest.getFileName())
+                    .uploadId(preSignRequest.getUploadId())
+                    .partNumber(preSignRequest.getPartCount())
+                    .contentLength(preSignRequest.getContentLength()) // Set exact content length for each part as needed
                     .build();
 
             // Create the pre signed request for uploading a part
-            UploadPartPresignRequest preSignRequest = UploadPartPresignRequest.builder()
+            UploadPartPresignRequest uploadPartPresignRequest = UploadPartPresignRequest.builder()
                     .uploadPartRequest(uploadPartRequest) // Provide the UploadPartRequest directly
                     .signatureDuration(Duration.ofHours(24)) // Set the pre signed URL expiration time
                     .build();
 
             // Generate the pre signed URL
-            var preSignedResponse = s3Presigner.presignUploadPart(preSignRequest);
+            var preSignedResponse = s3Presigner.presignUploadPart(uploadPartPresignRequest);
             // Prepare the response map
             Map<String, String> response = new HashMap<>();
             response.put("url", preSignedResponse.url().toString());
@@ -159,14 +127,19 @@ public class UploadServiceImpl implements UploadService {
         }
     }
 
-    public Map<String, String> completeMultipartUpload(String fileName, String uploadId, List<ETagList> eTagList) {
+    public Map<String, String> completeMultipartUpload(CompleteVideoUploadRequest completeVideoUploadRequest) {
         // Create a list of completed parts
-        List<CompletedPart> completedPartsList = eTagList.parallelStream()
+        var eTagList = completeVideoUploadRequest.getEtags();
+        var fileName = completeVideoUploadRequest.getFileName();
+        var uploadId = completeVideoUploadRequest.getUploadId();
+        List<CompletedPart> completedPartsList = eTagList.stream()
                 .map(part -> CompletedPart.builder()
-                        .partNumber(part.partNumber())
-                        .eTag(part.eTag())
+                        .partNumber(part.getPartNumber())
+                        .eTag(part.getETag())
                         .build())
+                .sorted(Comparator.comparing(CompletedPart::partNumber))
                 .toList();
+
 
         // Create the complete multipart upload request
         CompleteMultipartUploadRequest completeMultipartUploadRequest = CompleteMultipartUploadRequest.builder()
@@ -189,5 +162,51 @@ public class UploadServiceImpl implements UploadService {
         Map<String, String> responseMap = new HashMap<>();
         responseMap.put("message", "Upload completed successfully");
         return responseMap;
+    }
+
+    public Map<String, String> initiateSingleUpload(Video videoData) {
+        final String UPLOAD_STATUS_IN_PROGRESS = "InProgress";
+        // Build video entity with all properties at once
+        VideoEntity videoEntity = new VideoEntity()
+                .from(videoData);
+        videoEntity.setIsUploaded(UPLOAD_STATUS_IN_PROGRESS);
+        var savedEntity = videoRepository.save(videoEntity);
+        // Prepare the response
+        Map<String, String> responseMap = new HashMap<>();
+        responseMap.put("unique_video_id", savedEntity.getUniqueViewId());
+        return responseMap;
+    }
+
+    public Map<String, String> generatePreSignedUrl(PreSignRequest preSignRequest) {
+        try {
+            String dbId = videoRepository.findByUniqueViewId(preSignRequest.getUniqueViewId()).getId();
+            // Create folder structure
+            String folderNameRemote = folderName + dbId + "/";
+            String objectKey = folderNameRemote + preSignRequest.getFileName();
+
+            // Create a preSigned URL
+            PutObjectPresignRequest putObjectPresignRequest = PutObjectPresignRequest.builder()
+                    .signatureDuration(Duration.ofMinutes(15)) // URL expires in 15 minutes
+                    .putObjectRequest(PutObjectRequest.builder()
+                            .bucket(s3BucketName)
+                            .key(objectKey)
+                            .build())
+                    .build();
+
+            var preSignedRequest = S3Presigner.create().presignPutObject(putObjectPresignRequest);
+            String preSignedUrl = preSignedRequest.url().toString();
+
+            // Prepare the response
+            Map<String, String> responseMap = new HashMap<>();
+            responseMap.put("video_id", preSignRequest.getUniqueViewId());
+            responseMap.put("file_name", preSignRequest.getFileName());
+            responseMap.put("url", preSignedUrl);
+            responseMap.put("object_key", objectKey);
+
+            return responseMap;
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to generate presigned URL: " + e.getMessage(), e);
+        }
     }
 }

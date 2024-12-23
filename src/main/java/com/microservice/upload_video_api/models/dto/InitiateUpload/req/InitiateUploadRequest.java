@@ -14,4 +14,6 @@ public class InitiateUploadRequest {
     private String contentType;
     @JsonProperty("video_data")
     private Video videoData;
+    @JsonProperty("unique_video_id")
+    private String uniqueVideoId;
 }

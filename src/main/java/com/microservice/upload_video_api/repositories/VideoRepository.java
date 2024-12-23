@@ -6,4 +6,5 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface VideoRepository extends JpaRepository<VideoEntity, String> {
+    VideoEntity findByUniqueViewId(String uniqueViewId);
 }
