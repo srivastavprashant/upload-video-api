@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 public class PreSignRequest {
     @JsonProperty("file_name")
     private String fileName;
-    @JsonProperty("unique_video_id")
+    @JsonProperty("unique_view_id")
     private String uniqueViewId;
     @JsonProperty("upload_id")
     private String uploadId;

@@ -3,7 +3,6 @@ package com.microservice.upload_video_api.models.entities;
 import com.microservice.upload_video_api.models.dto.Video;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
-import jakarta.persistence.UniqueConstraint;
 import lombok.*;
 import org.springframework.beans.BeanUtils;
 
@@ -39,6 +38,8 @@ public class VideoEntity {
     private String uploadType;
     private String uploadSize;
     private String isUploaded;
+    private String isSegmented;
+    private String isTranscoded;
 
     public VideoEntity from(Video video){
         //todo, better way of copying, as this way we will also replace id(generated) sent by client side as per their choice, this shoulnt appen

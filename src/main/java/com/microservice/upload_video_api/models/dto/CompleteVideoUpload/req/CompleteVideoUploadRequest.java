@@ -9,7 +9,7 @@ import java.util.List;
 public class CompleteVideoUploadRequest {
     @JsonProperty("file_name")
     private String fileName;
-    @JsonProperty("unique_video_id")
+    @JsonProperty("unique_view_id")
     private String uniqueViewId;
     @JsonProperty("upload_id")
     private String uploadId;

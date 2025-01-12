@@ -57,9 +57,6 @@ public class UploadServiceImpl implements UploadService {
         final String UPLOAD_STATUS_IN_PROGRESS = "InProgress";
         final Duration EXPIRY_DURATION = Duration.ofHours(24);
 
-        // Generate file path
-        String filePath = folderName + initiateUploadRequest.getFileName();
-
         // Create expiry date once
         Instant expiryDate = Instant.now().plus(EXPIRY_DURATION);
 
@@ -68,6 +65,10 @@ public class UploadServiceImpl implements UploadService {
                 .from(initiateUploadRequest.getVideoData());
         videoEntity.setIsUploaded(UPLOAD_STATUS_IN_PROGRESS);
         videoEntity.setExpiryDateOfUploadId(expiryDate.atZone(ZoneId.systemDefault()).toLocalDateTime());
+
+        // Generate file path and file extension
+        var fileExtension = initiateUploadRequest.getFileName().substring(initiateUploadRequest.getFileName().lastIndexOf("."));
+        String filePath = folderName + videoEntity.getId() + fileExtension;
 
         // Create S3 upload request
         CreateMultipartUploadRequest createMultipartUploadRequest = CreateMultipartUploadRequest.builder()
@@ -92,17 +93,20 @@ public class UploadServiceImpl implements UploadService {
         return new UploadInitiateResponse(
                 initiateUploadRequest.getFileName(),
                 response.uploadId(),
-                response.abortDate()
+                response.abortDate(),
+                videoEntity.getUniqueViewId()
         );
     }
 
 
     public Map<String, String> generatePreSignedUrlMultiPartMethod(PreSignRequest preSignRequest) {
         try {
+            var fileId = videoRepository.findByUniqueViewId(preSignRequest.getUniqueViewId()).getId();
             // Create the upload part request
+            var fileExtension = preSignRequest.getFileName().substring(preSignRequest.getFileName().lastIndexOf("."));
             UploadPartRequest uploadPartRequest = UploadPartRequest.builder()
                     .bucket(s3BucketName)
-                    .key(folderName + preSignRequest.getFileName())
+                    .key(folderName + fileId + fileExtension)
                     .uploadId(preSignRequest.getUploadId())
                     .partNumber(preSignRequest.getPartCount())
                     .contentLength(preSignRequest.getContentLength()) // Set exact content length for each part as needed
@@ -130,7 +134,8 @@ public class UploadServiceImpl implements UploadService {
     public Map<String, String> completeMultipartUpload(CompleteVideoUploadRequest completeVideoUploadRequest) {
         // Create a list of completed parts
         var eTagList = completeVideoUploadRequest.getEtags();
-        var fileName = completeVideoUploadRequest.getFileName();
+        var fileExtension = completeVideoUploadRequest.getFileName().substring(completeVideoUploadRequest.getFileName().lastIndexOf("."));
+        var fileId = videoRepository.findByUniqueViewId(completeVideoUploadRequest.getUniqueViewId()).getId();
         var uploadId = completeVideoUploadRequest.getUploadId();
         List<CompletedPart> completedPartsList = eTagList.stream()
                 .map(part -> CompletedPart.builder()
@@ -144,7 +149,7 @@ public class UploadServiceImpl implements UploadService {
         // Create the complete multipart upload request
         CompleteMultipartUploadRequest completeMultipartUploadRequest = CompleteMultipartUploadRequest.builder()
                 .bucket(s3BucketName)
-                .key(folderName + fileName)
+                .key(folderName + fileId + fileExtension)
                 .uploadId(uploadId)
                 .multipartUpload(CompletedMultipartUpload.builder()
                         .parts(completedPartsList)

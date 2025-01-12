@@ -21,4 +21,7 @@ public class UploadInitiateResponse {
 
     @JsonProperty("expiry_date")
     private Instant expiryDate;
+
+    @JsonProperty("unique_view_id")
+    private String uniqueViewId;;
 }
